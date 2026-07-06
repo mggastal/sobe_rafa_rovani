@@ -8,7 +8,7 @@ from pathlib import Path
 # ══════════════════════════════════════════════════════
 # CONFIG
 # ══════════════════════════════════════════════════════
-SHEET_ID         = "ID_DO_SHEETS_AQUI"
+SHEET_ID         = "1kKFBRS1iEMKVgjBOxn-ndTgK5MMZdfd8pqrI3aa5EvQ"
 TEMPLATE_FILE    = "dashboard_lancamento_pago.html"
 OUTPUT_FILE      = "index.html"
 NOME_CLIENTE     = "Rafa Rovani"
@@ -22,16 +22,16 @@ PRODUTOS_EDUZZ   = ["ALL"]         # "ALL" ou [] = todos | ["A QUEBRA"] = só es
 # Venda = PAGO se qualquer UTM bater com o padrão abaixo (regex, case-insensitive). Senão = Orgânico.
 UTM_PAGO_REGEX   = "SOBE"          # padrão das UTMs de tráfego pago (ex: SOBE-QUEBRA02-...)
 
-CPA_BOM          = 50
-CPA_MEDIO        = 80
+CPA_BOM          = 20
+CPA_MEDIO        = 40
 ROAS_BOM         = 1.0
 ROAS_MEDIO       = 0.6
 
 # Metas do funil — define cores (verde/amarelo/vermelho) nas taxas
 # Cada métrica: [valor_bom, valor_medio] — acima do bom = verde, entre = amarelo, abaixo = vermelho
-CTR_BOM          = 1.2    # CTR ≥ 1.2% → verde | 0.8-1.2% → amarelo | <0.8% → vermelho
+CTR_BOM          = 1.0    # CTR ≥ 1.2% → verde | 0.8-1.2% → amarelo | <0.8% → vermelho
 CTR_MEDIO        = 0.8
-CR_BOM           = 75.0   # Connect Rate ≥ 75% → verde | 63-75% → amarelo | <63% → vermelho
+CR_BOM           = 70.0   # Connect Rate ≥ 75% → verde | 63-75% → amarelo | <63% → vermelho
 CR_MEDIO         = 63.0
 TX_IC_BOM        = 20.0   # Tx Init Checkout ≥ 20% → verde | 15-20% → amarelo | <15% → vermelho
 TX_IC_MEDIO      = 15.0
