@@ -1,0 +1,13 @@
+{
+  "cliente": "Rafa Rovani",
+  "cor": "#e11d48",
+  "letra": "R",
+  "lancamento": "QUEBRA02",
+  "atualizado": "06/07/2026",
+  "kpis": {
+    "spend": 269.12,
+    "vendas": 46,
+    "faturamento": 414.0,
+    "cpa": 22.43
+  }
+}
