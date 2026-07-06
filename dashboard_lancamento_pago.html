@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link rel="icon" type="image/png" href="logo.png">
 <title id="pageTab">Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -115,6 +116,19 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .tc tbody tr:last-child td{border-bottom:none;}
 .tc tbody tr:hover td{background:var(--surface2);}
 .num{text-align:right;font-family:'DM Mono',monospace;}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;vertical-align:middle;margin-right:5px;border:1px solid rgba(0,0,0,.08);}
+.status-dot.active{background:#22c55e;box-shadow:0 0 4px rgba(34,197,94,.5);}
+.status-dot.paused{background:#9ca3af;}
+[data-theme="dark"] .status-dot{border-color:rgba(255,255,255,.15);}
+[data-theme="dark"] .status-dot.paused{background:#6b7280;}
+.page-footer{background:#f0f2f7;border-top:1px solid rgba(0,0,0,.07);padding:18px 24px;display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:auto;}
+[data-theme="dark"] .page-footer{background:#0d1220;border-top-color:rgba(255,255,255,.06);}
+.page-footer img{height:28px;opacity:.7;}
+[data-theme="dark"] .page-footer img{filter:brightness(0) invert(1);opacity:.35;}
+.page-footer-txt{font-size:11px;color:#9ca3af;}
+.page-footer-txt strong{font-weight:700;color:#6b7280;}
+[data-theme="dark"] .page-footer-txt{color:#4b5563;}
+[data-theme="dark"] .page-footer-txt strong{color:#6b7280;}
 .cg{color:#059669;font-weight:700;}.cw2{color:#d97706;font-weight:700;}.cr{color:#dc2626;font-weight:700;}.cn{color:var(--muted);}
 
 /* CRIATIVOS */
@@ -203,6 +217,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 
 <aside class="sb" id="sidebar">
   <div class="sb-logo">
+    <img src="logo.png" alt="Logo" style="width:34px;height:34px;object-fit:contain;display:none" onload="this.style.display='block';document.getElementById('logoBox').style.display='none'" onerror="this.remove()">
     <div class="logo-box" id="logoBox">C</div>
     <div><div class="logo-name" id="sbNome">Dashboard</div><div class="logo-sub">Lançamento</div></div>
   </div>
@@ -259,13 +274,13 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       <div class="funnel-card"><div class="funnel-title">Funil de Conversão</div><div class="funnel-steps" id="funnelSteps"></div></div>
       <!-- Gráfico diário largura total -->
       <div class="cc mb14">
-        <div class="cc-t">Vendas Diárias (Hotmart) & Investimento</div>
+        <div class="cc-t">Vendas Diárias (Eduzz) & Investimento</div>
         <div class="cc-s">Vendas (barras laranja) · Invest. Meta (linha verde) · CPV (linha preta)</div>
         <div class="cw" style="height:230px"><canvas id="chOvMain"></canvas></div>
       </div>
       <!-- Origem (30%) + Produto (70%) -->
-      <div class="ov-bottom" style="display:grid;grid-template-columns:3fr 7fr;gap:12px;margin-bottom:14px;">
-        <div class="cc">
+      <div class="ov-bottom" id="ovBottom" style="display:grid;grid-template-columns:3fr 7fr;gap:12px;margin-bottom:14px;">
+        <div class="cc" id="cardOrigem">
           <div class="cc-t">Vendas por Origem · Last Click</div>
           <div class="cc-s">Tráfego Pago vs Orgânico · último clique antes da compra</div>
           <div class="cw" style="height:180px"><canvas id="chOvOrigem"></canvas></div>
@@ -339,6 +354,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     </div>
 
   </div>
+  <footer class="page-footer">
+    <img src="sobe.png" alt="Sobé Estratégias" onerror="this.style.display='none'">
+    <span class="page-footer-txt">Desenvolvido por <strong>Sobé Estratégias</strong></span>
+  </footer>
 </main>
 </div>
 
@@ -361,6 +380,7 @@ const TICKET_MEDIO     = null;
 
 // ═══ CONFIG ═══
 const LANCAMENTO_COD='VSE02';
+const USAR_ORIGEM=true;
 const NOME_CLIENTE='Cliente';
 const LOGO_LETRA='C';
 const COR_ACENTO='#e11d48';
@@ -387,6 +407,23 @@ let pesFilters={};
 
 // ═══ UTILS ═══
 const fR=v=>(v==null||isNaN(v))?'—':'R$'+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+function statusDot(st){
+  const s=(st||'').toString().toUpperCase().trim();
+  if(!s||s==='NAN') return '';
+  const isActive=s==='ACTIVE';
+  return `<span class="status-dot ${isActive?'active':'paused'}" title="${s}"></span>`;
+}
+let _stMap=null;
+function getStMap(){
+  if(_stMap) return _stMap;
+  _stMap={camp:{},adset:{}};
+  ['lct','all'].forEach(k=>{
+    const t=META_TABLES?.[k]?.all;
+    t?.camps?.forEach(c=>{if(c.st)_stMap.camp[c.n]=c.st;});
+    t?.adsets?.forEach(a=>{if(a.st)_stMap.adset[(a.camp||'')+'|||'+a.n]=a.st;});
+  });
+  return _stMap;
+}
 const fN=v=>v==null?'—':Number(v).toLocaleString('pt-BR');
 const fP=v=>v==null?'—':Number(v).toFixed(2)+'%';
 const r2=v=>Math.round(v*100)/100;
@@ -581,14 +618,14 @@ function renderOverview(){
   const cpaF=spendF>0&&purF>0?r2(spendF/purF):null;
   document.getElementById('ovKpis').innerHTML=`
     <div class="kpi" style="--kc:#334155"><div class="kpi-lbl">Investimento</div><div class="kpi-val" style="font-size:16px;color:var(--text)">${fR(spendF)}</div><div class="kpi-sub">Meta Ads</div></div>
-    <div class="kpi" style="--kc:#059669"><div class="kpi-lbl">Faturamento</div><div class="kpi-val" style="font-size:16px;color:#059669">${fR(hotValF)}</div><div class="kpi-sub">Hotmart</div></div>
+    <div class="kpi" style="--kc:#059669"><div class="kpi-lbl">Faturamento</div><div class="kpi-val" style="font-size:16px;color:#059669">${fR(hotValF)}</div><div class="kpi-sub">Eduzz</div></div>
     <div class="kpi" style="--kc:${roasCls(roasF)==='cg'?'#059669':roasCls(roasF)==='cw2'?'#d97706':'#dc2626'}">
       <div class="kpi-lbl">ROAS</div><div class="kpi-val ${roasCls(roasF)}">${roasF!=null?roasF.toFixed(2)+'x':'—'}</div>
-      <div class="kpi-sub">Hotmart / Invest.</div></div>
+      <div class="kpi-sub">Eduzz / Invest.</div></div>
     <div class="kpi" style="--kc:#334155">
       <div class="kpi-lbl">Vendas</div>
       <div class="kpi-val" style="color:var(--text)">${fN(hotQtdF)}</div>
-      <div class="kpi-sub" id="kpiVendasSub">Hotmart</div>
+      <div class="kpi-sub" id="kpiVendasSub">Eduzz</div>
     </div>
     <div class="kpi" style="--kc:${cpaCls(cpaF)==='cg'?'#059669':cpaCls(cpaF)==='cw2'?'#d97706':'#dc2626'}">
       <div class="kpi-lbl">CPA Meta Ads</div><div class="kpi-val ${cpaCls(cpaF)}">${fR(cpaF)}</div>
@@ -602,8 +639,8 @@ function renderOverview(){
     const pctMetaOv=hotQtdF>0?r2(metaPurOv/hotQtdF*100):null;
     const subEl=document.getElementById('kpiVendasSub');
     if(subEl) subEl.innerHTML=metaPurOv>0
-      ? 'Hotmart &nbsp;<span style="font-size:10px;font-weight:700;color:var(--text)">'+fN(metaPurOv)+' Meta ('+pctMetaOv+'%)</span>'
-      : 'Hotmart';
+      ? 'Eduzz &nbsp;<span style="font-size:10px;font-weight:700;color:var(--text)">'+fN(metaPurOv)+' Meta ('+pctMetaOv+'%)</span>'
+      : 'Eduzz';
     const funnelKpis={
       impressions:mdF.impressions?.reduce((a,b)=>a+(b||0),0)||0,
       link_clicks:mdF.link_clicks?.reduce((a,b)=>a+(b||0),0)||0,
@@ -657,8 +694,8 @@ function renderOverview(){
       ]},
       options:{...bo(),scales:{
         x:{ticks:{color:TXT(),font:bf,maxTicksLimit:14},grid:{color:GRID()}},
-        y:{ticks:{color:TXT(),font:bf,callback:v=>'R$'+v.toLocaleString()},grid:{color:GRID()}},
-        y1:{position:'right',ticks:{color:'#f97316',font:bf},grid:{display:false},grace:'20%'},
+        y:{beginAtZero:true,ticks:{color:TXT(),font:bf,callback:v=>'R$'+v.toLocaleString()},grid:{color:GRID()}},
+        y1:{beginAtZero:true,position:'right',ticks:{color:'#f97316',font:bf},grid:{display:false},grace:'20%'},
         y2:{position:'right',ticks:{color:'#555',font:bf,callback:v=>'R$'+v.toFixed(0)},grid:{display:false},offset:true},
       }}
     });
@@ -679,11 +716,15 @@ function renderOverview(){
       return true;
     });
 
-    // Pago vs Orgânico
+    // Pago vs Orgânico (oculto se USAR_ORIGEM=false — ex: UTMs ainda não confiáveis)
+    if(!USAR_ORIGEM){
+      const co=document.getElementById('cardOrigem'); if(co) co.style.display='none';
+      const ob=document.getElementById('ovBottom'); if(ob) ob.style.gridTemplateColumns='1fr';
+    }
     const pagoCnt=rawF.filter(r=>r.t&&r.t.includes('Pago')).length;
     const orgCnt =rawF.filter(r=>r.t&&r.t.includes('rgân')).length;
     dc('chOvOrigem');
-    CH['chOvOrigem']=new Chart(document.getElementById('chOvOrigem'),{
+    if(USAR_ORIGEM) CH['chOvOrigem']=new Chart(document.getElementById('chOvOrigem'),{
       type:'doughnut',
       data:{labels:['Tráfego Pago','Orgânico'],datasets:[{data:[pagoCnt,orgCnt],backgroundColor:['#f97316','#ea580c'],borderWidth:0}]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{
@@ -751,17 +792,17 @@ function renderMeta(){
     <div class="kpi" style="--kc:${roasCls(roasMK)==='cg'?'#059669':roasCls(roasMK)==='cw2'?'#d97706':'#dc2626'}">
       <div class="kpi-lbl">ROAS</div><div class="kpi-val ${roasCls(roasMK)}">${roasMK!=null?roasMK.toFixed(2)+'x':'—'}</div></div>
     <div class="kpi" style="--kc:#334155">
-      <div class="kpi-lbl">Vendas Hotmart</div>
+      <div class="kpi-lbl">Vendas Eduzz</div>
       <div class="kpi-val" style="color:var(--text)">${fN(hotQtdMK)}</div>
-      <div class="kpi-sub" id="kpiVendasMetaSub">Hotmart</div>
+      <div class="kpi-sub" id="kpiVendasMetaSub">Eduzz</div>
     </div>
     <div class="kpi" style="--kc:${cpaCls(cpaMK)==='cg'?'#059669':cpaCls(cpaMK)==='cw2'?'#d97706':'#dc2626'}">
       <div class="kpi-lbl">CPA Meta Ads</div><div class="kpi-val ${cpaCls(cpaMK)}">${fR(cpaMK)}</div></div>`;
   // Preencher sub do KPI Vendas com info Meta
   const subMeta=document.getElementById('kpiVendasMetaSub');
   if(subMeta) subMeta.innerHTML=purMK>0
-    ? 'Hotmart &nbsp;<span style="font-size:10px;font-weight:700;color:var(--text)">'+fN(purMK)+' Meta ('+r2(purMK/hotQtdMK*100)+'%)</span>'
-    : 'Hotmart';
+    ? 'Eduzz &nbsp;<span style="font-size:10px;font-weight:700;color:var(--text)">'+fN(purMK)+' Meta ('+r2(purMK/hotQtdMK*100)+'%)</span>'
+    : 'Eduzz';
 
   dc('chMetaMain');
   CH['chMetaMain']=new Chart(document.getElementById('chMetaMain'),{
@@ -773,8 +814,8 @@ function renderMeta(){
     ]},
     options:{...bo(),scales:{
       x:{ticks:{color:TXT(),font:bf,maxTicksLimit:14},grid:{color:GRID()}},
-      y:{ticks:{color:TXT(),font:bf,callback:v=>'R$'+v.toLocaleString()},grid:{color:GRID()}},
-      y1:{position:'right',ticks:{color:'#3b82f6',font:bf},grid:{display:false}},
+      y:{beginAtZero:true,ticks:{color:TXT(),font:bf,callback:v=>'R$'+v.toLocaleString()},grid:{color:GRID()}},
+      y1:{beginAtZero:true,position:'right',ticks:{color:'#3b82f6',font:bf},grid:{display:false}},
       y2:{position:'right',ticks:{color:'#555',font:bf,callback:v=>'R$'+v.toFixed(0)},grid:{display:false},offset:true},
     }}
   });
@@ -965,7 +1006,7 @@ function buildTable(elId,data,mainCol){
     }).join('');
     rows+=`<tr style="cursor:pointer" onclick="toggleCampRow('${cid}',this)">
       <td style="width:20px;text-align:center;color:var(--muted2);font-size:11px" id="arrow_${cid}">▶</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600" title="${r.n}">${r.n}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600" title="${r.n}">${statusDot(r.st||getStMap().camp[r.n])}${r.n}</td>
       ${tds}
     </tr>`;
     // Sub-linhas: conjuntos desta campanha
@@ -1041,7 +1082,7 @@ function toggleCampRow(id,rowEl){
       '<th class="num" style="font-size:9px;padding:4px 8px;color:var(--muted2)">ROAS</th>'+
       '</tr></thead><tbody>'+
       adsets.map(a=>`<tr onclick="toggleAdsetRow('${id}','${a.n.replace(/'/g,"\'")}','${campName.replace(/'/g,"\'")}',this)" style="cursor:pointer">
-        <td style="font-size:10px;padding:5px 8px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.n}">▶ ${a.n}</td>
+        <td style="font-size:10px;padding:5px 8px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.n}">▶ ${statusDot(a.st||getStMap().adset[(a.camp||campName)+'|||'+a.n])}${a.n}</td>
         <td class="num" style="font-size:10px;padding:5px 8px">${fR(a.spend)}</td>
         <td class="num" style="font-size:10px;padding:5px 8px">${fN(a.pur)}</td>
         <td class="num" style="font-size:10px;padding:5px 8px">${fR(a.rev)}</td>
@@ -1319,7 +1360,7 @@ function renderPesquisa(){
   const taxa=hotQtd>0?r2(resp/hotQtd*100):null;
   document.getElementById('pesKpis').innerHTML=`
     <div class="kpi" style="--kc:#3b82f6"><div class="kpi-lbl">Respostas</div><div class="kpi-val">${fN(resp)}</div><div class="kpi-sub">na pesquisa</div></div>
-    <div class="kpi" style="--kc:#334155"><div class="kpi-lbl">Vendas Hotmart</div><div class="kpi-val">${fN(hotQtd)}</div><div class="kpi-sub">produto filtrado</div></div>
+    <div class="kpi" style="--kc:#334155"><div class="kpi-lbl">Vendas Eduzz</div><div class="kpi-val">${fN(hotQtd)}</div><div class="kpi-sub">produto filtrado</div></div>
     <div class="kpi" style="--kc:#059669"><div class="kpi-lbl">Taxa Resp./Vendas</div><div class="kpi-val">${taxa!=null?taxa+'%':'—'}</div><div class="kpi-sub">respostas / vendas</div></div>`;
 
   buildUtmFilters();
