@@ -8,7 +8,7 @@ from pathlib import Path
 # ══════════════════════════════════════════════════════
 # CONFIG
 # ══════════════════════════════════════════════════════
-SHEET_ID         = "1kKFBRS1iEMKVgjBOxn-ndTgK5MMZdfd8pqrI3aa5EvQ"
+SHEET_ID         = "ID_DO_SHEETS_AQUI"
 TEMPLATE_FILE    = "dashboard_lancamento_pago.html"
 OUTPUT_FILE      = "index.html"
 NOME_CLIENTE     = "Rafa Rovani"
@@ -16,12 +16,13 @@ LOGO_LETRA       = "R"
 COR_ACENTO       = "#e11d48"
 LANCAMENTO_COD   = "QUEBRA02"      # filtra campanhas pelo código; "" = ver tudo
 USAR_PESQUISA    = True            # False = oculta aba Pesquisa no menu e dashboard
+USAR_ORIGEM      = False           # False = oculta "Vendas por Origem · Last Click" (reativar quando as UTMs da Eduzz estiverem confiáveis)
 PRODUTOS_EDUZZ   = ["ALL"]         # "ALL" ou [] = todos | ["A QUEBRA"] = só esse | ["Produto A","Produto B"] = ambos
 # Classificação Pago vs Orgânico via UTM (Eduzz manda utm_source/medium/campaign no webhook)
 # Venda = PAGO se qualquer UTM bater com o padrão abaixo (regex, case-insensitive). Senão = Orgânico.
-UTM_PAGO_REGEX   = ""          # padrão das UTMs de tráfego pago (ex: SOBE-QUEBRA02-...)
+UTM_PAGO_REGEX   = "SOBE"          # padrão das UTMs de tráfego pago (ex: SOBE-QUEBRA02-...)
 
-CPA_BOM          = 20
+CPA_BOM          = 50
 CPA_MEDIO        = 80
 ROAS_BOM         = 1.0
 ROAS_MEDIO       = 0.6
@@ -183,13 +184,14 @@ def load_meta():
     print("  Lendo meta-ads...")
     df=pd.read_csv(URL_META)
     df=df.rename(columns={"Date":"date","Campaign Name":"campaign","Adset Name":"adset",
-        "Ad Name":"ad","Thumbnail URL":"thumb","Spend (Cost, Amount Spent)":"spend",
+        "Ad Name":"ad","Thumbnail URL":"thumb","Status":"status","Spend (Cost, Amount Spent)":"spend",
         "Impressions":"impressions","Action Link Clicks":"link_clicks",
         "Action Landing Page View":"page_view","Action Omni Initiated Checkout":"init_checkout",
         "Action Omni Purchase":"purchase","Action Value Omni Purchase":"revenue_meta"})
     df["date"]=pd.to_datetime(df["date"],errors="coerce")
     for c in ["spend","impressions","link_clicks","page_view","init_checkout","purchase","revenue_meta"]:
         if c in df.columns: df[c]=to_num(df[c])
+    if "status" not in df.columns: df["status"]=""
     df["is_lct"]=df["campaign"].str.contains(LANCAMENTO_COD,na=False,case=False) if LANCAMENTO_COD else True
     df=df.dropna(subset=["date"])
     print(f"     {len(df)} linhas | {df['date'].min().date()} → {df['date'].max().date()}")
@@ -283,7 +285,7 @@ def build_rows(agg, col, ticket):
         sp=float(r["spend"]); imp=float(r["impressions"]); lc=float(r["link_clicks"])
         pv=float(r["page_view"]); ic=float(r["init_checkout"]); pur=float(r["purchase"])
         rev=float(r.get("revenue_meta",0) or pur*ticket)  # usa Action Value se disponível
-        rows.append({"n":str(r[col]),"spend":round(sp,2),"imp":int(imp),"lc":int(lc),
+        rows.append({"n":str(r[col]),"st":str(r.get("status","") or ""),"spend":round(sp,2),"imp":int(imp),"lc":int(lc),
             "pv":int(pv),"ic":int(ic),"pur":int(pur),"rev":round(rev,2),
             "ctr":round(lc/imp*100,2) if imp>0 else None,
             "cr": round(pv/lc*100,2)  if lc>0 else None,
@@ -298,22 +300,22 @@ def build_rows(agg, col, ticket):
 def meta_tables_period(df, p, img_dir, ticket):
     """Calcula tabelas para um subset p do df"""
     def ag(sub,col):
-        return sub.groupby(col).agg(spend=("spend","sum"),impressions=("impressions","sum"),
+        return sub.sort_values("date").groupby(col).agg(spend=("spend","sum"),impressions=("impressions","sum"),
             link_clicks=("link_clicks","sum"),page_view=("page_view","sum"),
             init_checkout=("init_checkout","sum"),purchase=("purchase","sum"),
-            revenue_meta=("revenue_meta","sum")).reset_index()
+            revenue_meta=("revenue_meta","sum"),status=("status","last")).reset_index()
     def make(sub,col): return build_rows(ag(sub,col),col,ticket)
     def make_adsets(sub):
-        agg2=sub.groupby(["campaign","adset"]).agg(spend=("spend","sum"),impressions=("impressions","sum"),
+        agg2=sub.sort_values("date").groupby(["campaign","adset"]).agg(spend=("spend","sum"),impressions=("impressions","sum"),
             link_clicks=("link_clicks","sum"),page_view=("page_view","sum"),
             init_checkout=("init_checkout","sum"),purchase=("purchase","sum"),
-            revenue_meta=("revenue_meta","sum")).reset_index()
+            revenue_meta=("revenue_meta","sum"),status=("status","last")).reset_index()
         rows=[]
         for _,r in agg2.sort_values("purchase",ascending=False).iterrows():
             sp=float(r["spend"]); imp=float(r["impressions"]); lc=float(r["link_clicks"])
             pv=float(r["page_view"]); ic=float(r["init_checkout"]); pur=float(r["purchase"])
             rev=float(r.get("revenue_meta",0) or pur*ticket)
-            rows.append({"n":str(r["adset"]),"camp":str(r["campaign"]),"spend":round(sp,2),
+            rows.append({"n":str(r["adset"]),"camp":str(r["campaign"]),"st":str(r.get("status","") or ""),"spend":round(sp,2),
                 "imp":int(imp),"lc":int(lc),"pv":int(pv),"ic":int(ic),"pur":int(pur),"rev":round(rev,2),
                 "ctr":round(lc/imp*100,2) if imp>0 else None,
                 "cr": round(pv/lc*100,2)  if lc>0 else None,
@@ -490,6 +492,7 @@ def inject_all(tpl, meta_k, meta_d, meta_dc, meta_raw_c, meta_t, meta_bd, hot_k,
     hoje_brt = date.today()  # data local do servidor (GitHub Actions = UTC, mas usamos a data atual)
     html=replace_js_const(html,"DATA_GERACAO", hoje_brt.strftime("%Y-%m-%d"))
     for k,v in [("LANCAMENTO_COD",f"'{LANCAMENTO_COD}'"),("NOME_CLIENTE",f"'{NOME_CLIENTE}'"),
+                ("USAR_ORIGEM","true" if USAR_ORIGEM else "false"),
                 ("LOGO_LETRA",f"'{LOGO_LETRA}'"),("COR_ACENTO",f"'{COR_ACENTO}'"),
                 ("CPA_BOM",str(CPA_BOM)),("CPA_MEDIO",str(CPA_MEDIO)),
                 ("ROAS_BOM",str(ROAS_BOM)),("ROAS_MEDIO",str(ROAS_MEDIO)),
