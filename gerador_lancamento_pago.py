@@ -8,7 +8,7 @@ from pathlib import Path
 # ══════════════════════════════════════════════════════
 # CONFIG
 # ══════════════════════════════════════════════════════
-SHEET_ID         = "ID_DO_SHEETS_AQUI"
+SHEET_ID         = "1kKFBRS1iEMKVgjBOxn-ndTgK5MMZdfd8pqrI3aa5EvQ"
 TEMPLATE_FILE    = "dashboard_lancamento_pago.html"
 OUTPUT_FILE      = "index.html"
 NOME_CLIENTE     = "Rafa Rovani"
@@ -19,9 +19,9 @@ USAR_PESQUISA    = True            # False = oculta aba Pesquisa no menu e dashb
 PRODUTOS_EDUZZ   = ["ALL"]         # "ALL" ou [] = todos | ["A QUEBRA"] = só esse | ["Produto A","Produto B"] = ambos
 # Classificação Pago vs Orgânico via UTM (Eduzz manda utm_source/medium/campaign no webhook)
 # Venda = PAGO se qualquer UTM bater com o padrão abaixo (regex, case-insensitive). Senão = Orgânico.
-UTM_PAGO_REGEX   = "SOBE"          # padrão das UTMs de tráfego pago (ex: SOBE-QUEBRA02-...)
+UTM_PAGO_REGEX   = ""          # padrão das UTMs de tráfego pago (ex: SOBE-QUEBRA02-...)
 
-CPA_BOM          = 50
+CPA_BOM          = 20
 CPA_MEDIO        = 80
 ROAS_BOM         = 1.0
 ROAS_MEDIO       = 0.6
