@@ -22,16 +22,16 @@ PRODUTOS_EDUZZ   = ["ALL"]         # "ALL" ou [] = todos | ["A QUEBRA"] = só es
 # Venda = PAGO se qualquer UTM bater com o padrão abaixo (regex, case-insensitive). Senão = Orgânico.
 UTM_PAGO_REGEX   = "SOBE"          # padrão das UTMs de tráfego pago (ex: SOBE-QUEBRA02-...)
 
-CPA_BOM          = 20
-CPA_MEDIO        = 40
+CPA_BOM          = 50
+CPA_MEDIO        = 80
 ROAS_BOM         = 1.0
 ROAS_MEDIO       = 0.6
 
 # Metas do funil — define cores (verde/amarelo/vermelho) nas taxas
 # Cada métrica: [valor_bom, valor_medio] — acima do bom = verde, entre = amarelo, abaixo = vermelho
-CTR_BOM          = 1.0    # CTR ≥ 1.2% → verde | 0.8-1.2% → amarelo | <0.8% → vermelho
+CTR_BOM          = 1.2    # CTR ≥ 1.2% → verde | 0.8-1.2% → amarelo | <0.8% → vermelho
 CTR_MEDIO        = 0.8
-CR_BOM           = 70.0   # Connect Rate ≥ 75% → verde | 63-75% → amarelo | <63% → vermelho
+CR_BOM           = 75.0   # Connect Rate ≥ 75% → verde | 63-75% → amarelo | <63% → vermelho
 CR_MEDIO         = 63.0
 TX_IC_BOM        = 20.0   # Tx Init Checkout ≥ 20% → verde | 15-20% → amarelo | <15% → vermelho
 TX_IC_MEDIO      = 15.0
@@ -375,6 +375,7 @@ def meta_breakdowns(df):
         return [{"n":str(r[dim]),"spend":round(float(r["spend"]),2),"pur":int(r["purchase"]),"cpa":safe(r["cpa"])} for _,r in agg.iterrows()]
     try:
         df_ga=pd.read_csv(URL_GA)
+        df_ga.columns=[str(c).strip() for c in df_ga.columns]
         df_ga["date"]=pd.to_datetime(df_ga["Date"],errors="coerce")
         df_ga["spend"]=to_num(df_ga["Spend (Cost, Amount Spent)"])
         df_ga["purchase"]=to_num(df_ga["Action Omni Purchase"])
@@ -384,6 +385,7 @@ def meta_breakdowns(df):
     except Exception as e: print(f"  Aviso GA: {e}"); df_ga=pd.DataFrame()
     try:
         df_pt=pd.read_csv(URL_PT)
+        df_pt.columns=[str(c).strip() for c in df_pt.columns]
         df_pt["date"]=pd.to_datetime(df_pt["Date"],errors="coerce")
         df_pt["spend"]=to_num(df_pt["Spend (Cost, Amount Spent)"])
         df_pt["purchase"]=to_num(df_pt["Action Omni Purchase"])
@@ -411,21 +413,43 @@ def meta_breakdowns(df):
             plat_d=seg(ag_pt,"platform")
         else: plat_d=[]
         result[pname]={"age":age_d,"gender":gen_d,"platform":plat_d}
-    # Também exportar raw por dia para filtro de datas livres
+    # Também exportar raw por dia para filtro de datas livres e por campanha
+    # (campanha vira índice 'ci' no array _camps para controlar tamanho do arquivo)
+    camps_bd=[]
+    def camp_idx(name):
+        name=str(name)
+        if name not in camps_bd: camps_bd.append(name)
+        return camps_bd.index(name)
+    def find_camp_col(df):
+        for c in df.columns:
+            cl=str(c).strip().lower()
+            if cl in ("campaign name","campaign","campanha","nome da campanha"): return c
+        return None
+    cga=find_camp_col(df_ga) if len(df_ga)>0 else None
+    cpt=find_camp_col(df_pt) if len(df_pt)>0 else None
+    if cga: df_ga["campaign"]=df_ga[cga].astype(str)
+    else:   print("  ⚠ breakdown gender/age SEM coluna de campanha — filtro por campanha ficará indisponível nessa aba")
+    if cpt: df_pt["campaign"]=df_pt[cpt].astype(str)
+    else:   print("  ⚠ breakdown platform SEM coluna de campanha — filtro por campanha ficará indisponível nessa aba")
     raw_ga=[]
     if len(df_ga)>0:
         for _,r in df_ga.iterrows():
             if pd.isna(r['date']): continue
-            raw_ga.append({'d':r['date'].strftime('%d/%m'),'age':str(r['age']),'gen':str(r['gender']),
-                           'sp':round(float(r['spend']),2),'pur':int(r['purchase'])})
+            row={'d':r['date'].strftime('%d/%m'),'age':str(r['age']),'gen':str(r['gender']),
+                 'sp':round(float(r['spend']),2),'pur':int(r['purchase'])}
+            if "campaign" in df_ga.columns: row['ci']=camp_idx(r['campaign'])
+            raw_ga.append(row)
     raw_pt=[]
     if len(df_pt)>0:
         for _,r in df_pt.iterrows():
             if pd.isna(r['date']): continue
-            raw_pt.append({'d':r['date'].strftime('%d/%m'),'plat':str(r['platform']),
-                           'sp':round(float(r['spend']),2),'pur':int(r['purchase'])})
+            row={'d':r['date'].strftime('%d/%m'),'plat':str(r['platform']),
+                 'sp':round(float(r['spend']),2),'pur':int(r['purchase'])}
+            if "campaign" in df_pt.columns: row['ci']=camp_idx(r['campaign'])
+            raw_pt.append(row)
     result['_raw_ga']=raw_ga
     result['_raw_pt']=raw_pt
+    result['_camps']=camps_bd
     return result
 
 # ══ PESQUISA ══════════════════════════════════════════
