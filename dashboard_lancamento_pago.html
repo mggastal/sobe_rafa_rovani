@@ -81,6 +81,15 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .f-bar-lbl{font-size:12px;font-weight:600;color:#fff;}
 .f-bar.narrow .f-bar-lbl,.f-bar.narrow .f-bar-val{color:#fff;}
 .f-bar-val{font-family:'DM Mono',monospace;font-size:14px;font-weight:700;color:#fff;}
+.f-bar-row{display:flex;align-items:center;gap:8px;}
+.f-bar-val-out{font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;}
+@media(max-width:640px){
+  .funnel-card{padding:14px 12px;}
+  .f-bar{padding:0 10px;min-width:56px;height:34px;}
+  .f-bar-lbl{font-size:10px;white-space:nowrap;}
+  .f-bar-val{font-size:12px;}
+  .f-rate-txt{font-size:11px;}
+}
 .f-between{display:flex;align-items:center;gap:8px;padding:4px 0 4px 12px;}
 .f-arrow{color:var(--muted2);font-size:14px;}
 .f-rate-txt{font-size:13px;font-weight:800;padding:2px 10px;border-radius:20px;}
@@ -568,10 +577,14 @@ function buildFunnel(mk){
   const el=document.getElementById('funnelSteps');
   let html='';
   steps.forEach((s,i)=>{
+    const narrow=widths[i]<35;
     html+=`<div class="f-step">
-      <div class="f-bar${widths[i]<35?' narrow':''}" style="width:${widths[i]}%;background:${s.color}">
-        <span class="f-bar-lbl">${s.lbl}</span>
-        <span class="f-bar-val">${fN(s.val)}</span>
+      <div class="f-bar-row">
+        <div class="f-bar${narrow?' narrow':''}" style="width:${widths[i]}%;background:${s.color}">
+          <span class="f-bar-lbl">${s.lbl}</span>
+          ${narrow?'':`<span class="f-bar-val">${fN(s.val)}</span>`}
+        </div>
+        ${narrow?`<span class="f-bar-val-out">${fN(s.val)}</span>`:''}
       </div>`;
     if(i<rates.length){
       const r=rates[i];
@@ -616,6 +629,7 @@ function renderOverview(){
   const hotValF=r2(rawKpi.reduce((s,r)=>s+r.v,0));
   const roasF=spendF>0&&hotValF>0?r2(hotValF/spendF):null;
   const cpaF=spendF>0&&purF>0?r2(spendF/purF):null;
+  const cpaGeral=spendF>0&&hotQtdF>0?r2(spendF/hotQtdF):null;
   document.getElementById('ovKpis').innerHTML=`
     <div class="kpi" style="--kc:#334155"><div class="kpi-lbl">Investimento</div><div class="kpi-val" style="font-size:16px;color:var(--text)">${fR(spendF)}</div><div class="kpi-sub">Meta Ads</div></div>
     <div class="kpi" style="--kc:#059669"><div class="kpi-lbl">Faturamento</div><div class="kpi-val" style="font-size:16px;color:#059669">${fR(hotValF)}</div><div class="kpi-sub">Eduzz</div></div>
@@ -627,9 +641,9 @@ function renderOverview(){
       <div class="kpi-val" style="color:var(--text)">${fN(hotQtdF)}</div>
       <div class="kpi-sub" id="kpiVendasSub">Eduzz</div>
     </div>
-    <div class="kpi" style="--kc:${cpaCls(cpaF)==='cg'?'#059669':cpaCls(cpaF)==='cw2'?'#d97706':'#dc2626'}">
-      <div class="kpi-lbl">CPA Meta Ads</div><div class="kpi-val ${cpaCls(cpaF)}">${fR(cpaF)}</div>
-      <div class="kpi-sub">Custo por venda</div></div>`;
+    <div class="kpi" style="--kc:${cpaCls(cpaGeral)==='cg'?'#059669':cpaCls(cpaGeral)==='cw2'?'#d97706':'#dc2626'}">
+      <div class="kpi-lbl">CPA</div><div class="kpi-val ${cpaCls(cpaGeral)}">${fR(cpaGeral)}</div>
+      <div class="kpi-sub">Invest. / vendas Eduzz</div></div>`;
 
   // Recalcular funil a partir dos dados diários filtrados
   const mdF=getMD();
