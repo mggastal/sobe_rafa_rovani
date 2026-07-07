@@ -13,7 +13,7 @@ TEMPLATE_FILE    = "dashboard_lancamento_pago.html"
 OUTPUT_FILE      = "index.html"
 NOME_CLIENTE     = "Rafa Rovani"
 LOGO_LETRA       = "R"
-COR_ACENTO       = "#e11d48"
+COR_ACENTO       = "#C1994B"
 LANCAMENTO_COD   = "QUEBRA02"      # filtra campanhas pelo código; "" = ver tudo
 USAR_PESQUISA    = True            # False = oculta aba Pesquisa no menu e dashboard
 USAR_ORIGEM      = False           # False = oculta "Vendas por Origem · Last Click" (reativar quando as UTMs da Eduzz estiverem confiáveis)
