@@ -1,31 +1,24 @@
 name: Atualizar Dashboard Lançamento Pago
-
 on:
   schedule:
-    - cron: '0 9 * * *'   # 06:00 Brasília = 09:00 UTC
+    - cron: '0 * * * *'   # roda a cada hora, no minuto 0
   workflow_dispatch:        # botão para rodar manualmente também
-
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Instalar dependências
         run: pip install pandas requests openpyxl
-
       - name: Rodar gerador
         run: python gerador_lancamento_pago.py
-
       - name: Commit e push
         run: |
           git config user.name "github-actions[bot]"
