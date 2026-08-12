@@ -15,8 +15,20 @@ NOME_CLIENTE     = "Rafa Rovani"
 LOGO_LETRA       = "R"
 COR_ACENTO       = "#C1994B"
 LANCAMENTO_COD   = "QUEBRA02"      # filtra campanhas pelo código; "" = ver tudo
+DATA_MINIMA      = "01/01/2026"    # ignora linhas ANTES desta data (a planilha tem histórico de
+                                   # 2024/2025; sem o corte, os filtros por data — que usam dd/mm —
+                                   # somariam o mesmo dia de anos diferentes e inflariam o invest.)
 USAR_PESQUISA    = True            # False = oculta aba Pesquisa no menu e dashboard
 USAR_ORIGEM      = False           # False = oculta "Vendas por Origem · Last Click" (reativar quando as UTMs da Eduzz estiverem confiáveis)
+USAR_LOGO        = True            # False = não usa logo.png (sidebar mostra só a letra; sem favicon)
+USAR_RODAPE      = True            # False = oculta o rodapé "Desenvolvido por Sobé Estratégias"
+MOEDA_SIMBOLO    = "R$"            # símbolo exibido no dashboard
+FUNIL_TITULO     = "Funil de Conversão"
+FUNIL_COMPRAS_PAGO = False         # True = etapa "Compras" usa vendas com SCK pago
+FONTE_LABEL      = "Eduzz"         # rótulo sob o KPI de Vendas
+NOTA_RECEITA     = "* Receita e ROAS: Action Value Omni Purchase do Meta (atribuição)"
+USAR_IDIOMAS     = False           # True = botão PT/ES na topbar traduz o relatório
+IDIOMA_PADRAO    = "pt"            # idioma inicial do relatório: "es" ou "pt"
 PRODUTOS_EDUZZ   = ["ALL"]         # "ALL" ou [] = todos | ["A QUEBRA"] = só esse | ["Produto A","Produto B"] = ambos
 # Classificação Pago vs Orgânico via UTM (Eduzz manda utm_source/medium/campaign no webhook)
 # Venda = PAGO se qualquer UTM bater com o padrão abaixo (regex, case-insensitive). Senão = Orgânico.
@@ -78,6 +90,15 @@ def download_thumb(url, d):
     except: return ""
 
 # ══ EDUZZ (carrega primeiro para ter ticket_medio) ══
+def corta_data_minima(df, campo="date", label=""):
+    if not DATA_MINIMA or campo not in df.columns: return df
+    lim = pd.to_datetime(DATA_MINIMA, dayfirst=True)
+    antes = int((df[campo] < lim).sum())
+    if antes:
+        df = df[df[campo] >= lim]
+        print(f"     ⚠ {label}: {antes} linha(s) antes de {DATA_MINIMA} ignorada(s)")
+    return df
+
 def parse_eduzz_dates(s):
     """Datas do webhook Eduzz: YYYYMMDD (trans_paiddate). Aceita também dd/mm/yyyy e ISO."""
     s = s.astype(str).str.strip().str.replace(r"\.0$","",regex=True).str.split(" ").str[0]
@@ -112,6 +133,7 @@ def load_hotmart():
         m = df["date"].isna()
         if m.any(): df.loc[m,"date"] = parse_eduzz_dates(df.loc[m,"trans_createdate"])
     df = df.dropna(subset=["date"])
+    df = corta_data_minima(df, "date", "vendas")
     df["date"] = df["date"].dt.normalize()
 
     # ── Valor ──
@@ -194,6 +216,7 @@ def load_meta():
     if "status" not in df.columns: df["status"]=""
     df["is_lct"]=df["campaign"].str.contains(LANCAMENTO_COD,na=False,case=False) if LANCAMENTO_COD else True
     df=df.dropna(subset=["date"])
+    df=corta_data_minima(df,"date","meta-ads")
     print(f"     {len(df)} linhas | {df['date'].min().date()} → {df['date'].max().date()}")
     return df
 
@@ -377,6 +400,7 @@ def meta_breakdowns(df):
         df_ga=pd.read_csv(URL_GA)
         df_ga.columns=[str(c).strip() for c in df_ga.columns]
         df_ga["date"]=pd.to_datetime(df_ga["Date"],errors="coerce")
+        df_ga=df_ga.dropna(subset=["date"]);df_ga=corta_data_minima(df_ga,"date","breakdown")
         df_ga["spend"]=to_num(df_ga["Spend (Cost, Amount Spent)"])
         df_ga["purchase"]=to_num(df_ga["Action Omni Purchase"])
         df_ga["age"]=df_ga["Age (Breakdown)"].astype(str)
@@ -387,6 +411,7 @@ def meta_breakdowns(df):
         df_pt=pd.read_csv(URL_PT)
         df_pt.columns=[str(c).strip() for c in df_pt.columns]
         df_pt["date"]=pd.to_datetime(df_pt["Date"],errors="coerce")
+        df_pt=df_pt.dropna(subset=["date"]);df_pt=corta_data_minima(df_pt,"date","breakdown")
         df_pt["spend"]=to_num(df_pt["Spend (Cost, Amount Spent)"])
         df_pt["purchase"]=to_num(df_pt["Action Omni Purchase"])
         df_pt["platform"]=df_pt["Platform Position (Breakdown)"].astype(str)
@@ -462,11 +487,21 @@ def pesquisa_process(df, hot_qtd):
     SKIP_COLS=set(UTM_COLS+["Carimbo de data/hora","Timestamp","Email","email",
                              "Nome","nome","ID","id","Unnamed: 0"])
     # Considerar como pergunta qualquer coluna com texto longo (provável questão)
+    def _pergunta_valida(c):
+        s=df[c]; nn=s.notna().sum(); nu=s.nunique()
+        if nu>50: return False                        # muitos valores distintos → não é múltipla escolha
+        if nn>=5 and nu/max(nn,1)>=0.8: return False  # respostas quase todas diferentes (nome, email, whatsapp...) → lixo visual
+        vals=s.dropna().astype(str)
+        if nn>0:
+            # padrão e-mail ou telefone na maioria das respostas → dado pessoal, não pergunta
+            if (vals.str.contains(r"@.+\.",regex=True).mean()>0.5): return False
+            if (vals.str.replace(r"[\s\-\(\)\+]","",regex=True).str.fullmatch(r"\d{8,14}").mean()>0.5): return False
+        return True
     PERGUNTAS=[c for c in df.columns
                if c not in SKIP_COLS
                and not c.lower().startswith("unnamed")
                and pd.api.types.is_string_dtype(df[c])  # aceita str e object
-               and df[c].nunique() <= 50] # não é ID único por linha
+               and _pergunta_valida(c)]
     graficos=[]
     for p in PERGUNTAS:
         if p not in df.columns: continue
@@ -517,6 +552,15 @@ def inject_all(tpl, meta_k, meta_d, meta_dc, meta_raw_c, meta_t, meta_bd, hot_k,
     html=replace_js_const(html,"DATA_GERACAO", hoje_brt.strftime("%Y-%m-%d"))
     for k,v in [("LANCAMENTO_COD",f"'{LANCAMENTO_COD}'"),("NOME_CLIENTE",f"'{NOME_CLIENTE}'"),
                 ("USAR_ORIGEM","true" if USAR_ORIGEM else "false"),
+                ("USAR_LOGO","true" if USAR_LOGO else "false"),
+                ("USAR_RODAPE","true" if USAR_RODAPE else "false"),
+                ("MOEDA",f"'{MOEDA_SIMBOLO}'"),
+                ("FUNIL_TITULO",f"'{FUNIL_TITULO}'"),
+                ("FUNIL_COMPRAS_PAGO","true" if FUNIL_COMPRAS_PAGO else "false"),
+                ("FONTE_LABEL",f"'{FONTE_LABEL}'"),
+                ("NOTA_RECEITA",f"'{NOTA_RECEITA}'"),
+                ("USAR_IDIOMAS","true" if USAR_IDIOMAS else "false"),
+                ("LANG_DEFAULT",f"'{IDIOMA_PADRAO}'"),
                 ("LOGO_LETRA",f"'{LOGO_LETRA}'"),("COR_ACENTO",f"'{COR_ACENTO}'"),
                 ("CPA_BOM",str(CPA_BOM)),("CPA_MEDIO",str(CPA_MEDIO)),
                 ("ROAS_BOM",str(ROAS_BOM)),("ROAS_MEDIO",str(ROAS_MEDIO)),
