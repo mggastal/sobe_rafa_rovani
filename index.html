@@ -2529,7 +2529,7 @@ function toggleAdsetRow(campId,adsetName,campName,rowEl){
   const open=sub.style.display==='none';
   sub.style.display=open?'table-row':'none';
   const arrow=rowEl.querySelector('td:first-child');
-  if(arrow) arrow.textContent=(open?'▼':'▶')+' '+adsetName;
+  if(arrow){const dot=arrow.querySelector('.status-dot');arrow.textContent=(open?'▼':'▶')+' ';if(dot)arrow.appendChild(dot);arrow.appendChild(document.createTextNode(adsetName));} // mantém a bolinha de status
   if(open){
     const mt=getMT();
     const ads=mt?.ads?.filter(a=>a.adset===adsetName&&a.camp===campName)||[];
